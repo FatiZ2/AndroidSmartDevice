@@ -1,5 +1,6 @@
 package fr.isen.chenani.androidsmartdevice
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -31,6 +32,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
+import android.bluetooth.BluetoothDevice
+import android.content.Intent
+import androidx.core.app.ActivityCompat
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import fr.isen.chenani.androidsmartdevice.ui.theme.AndroidSmartDeviceTheme
 
 class ScanActivity : ComponentActivity() {
@@ -39,7 +46,7 @@ class ScanActivity : ComponentActivity() {
     private var bluetoothLeScanner: BluetoothLeScanner? = null
     private val handler = Handler(Looper.getMainLooper())
     private val scanTimeout = 10000L // 10 secondes
-    private var isScanning = false
+    private var isScanning by mutableStateOf(false)
     private lateinit var scanResults: MutableList<ScanResult>
 
     // ✅ Permission launcher bien placé
@@ -55,6 +62,7 @@ class ScanActivity : ComponentActivity() {
             initBluetoothAndUI()
         }
     }
+
     private fun getRequiredPermissions(): Array<String> {
         return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             arrayOf(
@@ -63,15 +71,13 @@ class ScanActivity : ComponentActivity() {
                 android.Manifest.permission.BLUETOOTH_ADMIN,
                 android.Manifest.permission.ACCESS_FINE_LOCATION,
             )
-        }
-        else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             arrayOf(
                 android.Manifest.permission.ACCESS_BACKGROUND_LOCATION,
                 android.Manifest.permission.BLUETOOTH_ADMIN,
                 android.Manifest.permission.ACCESS_FINE_LOCATION,
             )
-        }
-        else {
+        } else {
             arrayOf(
                 android.Manifest.permission.ACCESS_FINE_LOCATION,
                 android.Manifest.permission.BLUETOOTH_ADMIN
@@ -84,7 +90,6 @@ class ScanActivity : ComponentActivity() {
 
         val requiredPermissions = getRequiredPermissions()
 
-
         val allGranted = requiredPermissions.all {
             ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
@@ -96,6 +101,7 @@ class ScanActivity : ComponentActivity() {
 
         initBluetoothAndUI()
     }
+
     private fun initBluetoothAndUI() {
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = bluetoothManager.adapter
@@ -118,18 +124,13 @@ class ScanActivity : ComponentActivity() {
                     devices = scanResults,
                     isScanning = isScanning,
                     onToggleScan = {
-                        if (isScanning) {
-                            stopBleScan()
-                        } else {
-                            startBleScan()
-                        }
+                        if (isScanning) stopBleScan() else startBleScan()
                     },
                     onBack = { finish() }
                 )
             }
         }
     }
-
 
     @SuppressLint("MissingPermission")
     private fun startBleScan() {
@@ -150,6 +151,7 @@ class ScanActivity : ComponentActivity() {
 
         isScanning = false
         bluetoothLeScanner?.stopScan(scanCallback)
+        scanResults.clear() // Vide la liste des résultats de scan
     }
 
     private val scanCallback = object : ScanCallback() {
@@ -170,6 +172,7 @@ class ScanActivity : ComponentActivity() {
     }
 }
 
+
 @SuppressLint("MissingPermission")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -179,7 +182,6 @@ fun ScanScreen(
     onToggleScan: () -> Unit,
     onBack: () -> Unit
 ) {
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -218,21 +220,47 @@ fun ScanScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = if (isScanning) "Scan en cours..." else "Scan arrêté",
+                text = if (isScanning) "Appuyer pour arrêter" else "Appuyer pour scanner",
                 style = MaterialTheme.typography.bodyLarge
             )
 
+
             Spacer(modifier = Modifier.height(24.dp))
 
+            val context = LocalContext.current
             LazyColumn {
                 items(devices) { device ->
-                    Text(
-                        text = device.device.name ?: "Appareil Inconnu",
-                        modifier = Modifier.padding(8.dp)
-                    )
+                    // Affichage de chaque appareil
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                            .clickable {
+                                // Créer l'intent pour rediriger vers ConnectActivity
+                                val intent = Intent(context, ConnectActivity::class.java)
+                                intent.putExtra("device", device.device) // Passer l'adresse de l'appareil
+                                context.startActivity(intent) // Lancer l'activité
+                            },
+                        elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = device.device.name ?: "Appareil Inconnu",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color.Black
+                            )
+                            Text(
+                                text = "Adresse : ${device.device.address}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+
+
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }
     }
 }
-
